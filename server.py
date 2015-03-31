@@ -44,8 +44,8 @@ def updateRooms():
     rooms=[]
     room = cur.fetchall()
     for roomNum in room:
-        rooms.append(roomNum['tableName'])
-        print roomNum['tableName']
+        rooms.append(roomNum[0])
+        print roomNum[0]
     emit('rooms', rooms)
     
     
