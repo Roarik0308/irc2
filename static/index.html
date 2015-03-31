@@ -67,6 +67,7 @@ if(showhide == "show"){
         $scope.roster = [];
         $scope.name = '';
         $scope.text = '';
+        $scope.search = [];
         $scope.searchterm = '';
   
 
@@ -86,10 +87,34 @@ if(showhide == "show"){
           $scope.roster = names;
           $scope.$apply();
         });
+        socket.on('rooms', function (rooms) {
+          console.log("Got some new rooms");
+          $scope.rooms = rooms;
+          if(!$scope.current_room)
+                $scope.current_room=rooms[0];
+          
+          $scope.$apply();
+        });
+         $scope.changeRoom = function(new_room)
+        {
+          $scope.current_room=new_room;
+          //socket.emit('changeRoom',$scope.new_room)
+        }
+         $scope.createRoom = function()
+        {
+          if($scope.new_room_name.length>0)
+          {
+            //superagent.post('/new_room').send({name:$scope.new_room_name}).end(function(err, result){
+            socket.emit('new_room', $scope.new_room_name);
+            //});
+          }
 
+          $scope.new_room_name='';
+          console.log("Create room: "+$scope.new_room_name);
+        }
         socket.on('search', function (srch) {
-          console.log(srch)
-          $scope.search.push(srch);
+          console.log('searching')
+          $scope.results.push(srch);
           $scope.$apply();
         });
 
@@ -177,6 +202,11 @@ if(showhide == "show"){
       <div class="row">
         <div class="span3">
           <ul class="nav nav-list well">
+            <li class="nav-header">Rooms</li>
+            <li><input ng-model='new_room_name' type='text' style='width:100%'/><div ng-click='createRoom()'>Create</div></li>
+            <li ng-repeat="room in rooms" ng-click="changeRoom(room)" ng-class="{'current_room': room==current_room}">{{room}}</li>
+          </ul>
+          <ul class="nav nav-list well">
             <li class="nav-header">Local Users</li>
             <li ng-repeat="user in roster" ng-bind="user">
             </li>
@@ -212,21 +242,42 @@ if(showhide == "show"){
                 <input type="text" class="span6" ng-model="text" placeholder="Message">
                 <input type="submit" class="span1 btn btn-primary" value="Send" ng-disabled="!text">
               </div>
-            </form> 
+            
+              
+            
+          </div>
+          </form> 
           <form ng-submit="search()">
                                <!--<input type="text" placeholder="Search term" required>
                                 <input type="button" value="Search" ng-disabled="!searchterm"> -->
             <input type="text" class="span6" ng-model="searchterm" placeholder="Search term">
             <input type="submit" class="span1 btn btn-primary" value="Search" ng-disabled="!searchterm">
+           <table>
+        
+           <thead>
+              
                                 
           </form>
-              
-            
-          </div>
+
         </div>
+                   <table class="table table-striped table-bordered">
+            <thead>
+              <tr>
+                <th class="span8">Search Results</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="r in results">
+                <td class="span2" ng-bind="r.Text"></td>
+                <td class="span7" ng-bind="r.user"></td>
+              </tr>
+            </tbody>
+          </table>
       </div>
     </div>
         <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.16/socket.io.min.js"></script>
+            <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/superagent/0.15.7/superagent.min.js"></script>
+    
     <script src="/js/jquery.min.js"></script>
     <script src="/js/bootstrap.min.js"></script>
     <script src="/js/angular.min.js"></script>

@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import Flask, session, render_template, request, redirect, url_for
+from flask import Flask, session, render_template, request, redirect, url_for, jsonify
 from flask.ext.socketio import SocketIO, emit
 import psycopg2
 import psycopg2.extras
@@ -11,9 +11,14 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
 messages = [{'text':'test', 'name':'testName'}]
-#searchIn = [{ 'text':'searchterm', 'name':'username'}] This breaks our messages term and it would break our chat and start inserting empty strings 
+searchIn = [{ 'text':'searchterm', 'name':'username'}] #This breaks our messages term and it would break our chat and start inserting empty strings 
 users = {}
-
+room = []
+rooms = ['Spammers', 'Police','NSA'] # these will remain the names we use, but we will just have to translate them into message(_,2,3)
+global List # what is list?
+global currentChatRoom
+currentChatRoom = 'NSA'
+DefultRoom = 'SELECT message, username FROM NSA'
 def connectToDB():
   connectionString = 'dbname=chatroom user=postgres password=Razula host=localhost'
   try:
@@ -32,68 +37,124 @@ def updateRoster():
     print 'broadcasting names'
     emit('roster', names, broadcast=True)
     
+def updateRooms():
+    conn = connectToDB()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)      
+    #query = "select tableName from names"
+    #cur.execute(query)
+    #rooms=[]
+    #room = cur.fetchall()
+    #for roomNum in room:
+        #rooms.append(roomNum['tableName'])
+        #print roomNum['tableName']
+    emit('rooms', rooms)
+    
+    
 
+    
+#@app.route('/new_room', methods=['POST'])
+@socketio.on('new_room', namespace = '/chat')
+def new_room(Pass_Room):
+
+    print "newroom"
+   # rooms.append(Pass_Room)
+    print 'updating rooms'
+    updateRooms()
+    print Pass_Room
+    conn = connectToDB()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)  
+    query = " CREATE TABLE IF NOT EXISTS %s ( id serial, username varchar(30) NOT NULL, message varchar(500) NOT NULL, PRIMARY KEY(id))" % Pass_Room
+    cur.execute(query)
+    conn.commit() 
+    query = "INSERT INTO names (tableName) VALUES (%s)"
+    cur.execute(query,(Pass_Room,))
+    conn.commit()
+    print "after query"
+    #updateRooms()
+
+   # return jsonify(success= "ok")
+    
+@socketio.on('changeRoom',namespace='/chat')
+def changeRoom(room_name):
+    print "changing ROOOOOOOOM"
+    currentChatRoom = room_name
+    conn = connectToDB()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)  
+    #query = "SELECT message, username from %s" % currentChatRoom 
+    #cur.execute(query)    
+    #messages = cur.fetchall()
+
+    #for message in messages:
+    #    message = {'text':message['message'],'name':message['username']}
+    #    emit('message', message)    
+    print currentChatRoom
+    
+    
 @socketio.on('connect', namespace='/chat')
 def test_connect():
+   
     session['uuid']=uuid.uuid1()
     session['username']='starter name'
     print 'connected'
     
     users[session['uuid']]={'username':'New User'}
+    if session['uuid'] in users:
+        del users[session['uuid']]
     updateRoster()
-    
+    updateRooms()
+    query = "SELECT message, username FROM %s ORDER by id desc limit 10" % currentChatRoom
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)  
-   # empty = ""
-    #typing = request.form['msg']
-    #new_message(typing)
-    cur.execute("select * from messages") # i just remembered this will give us a dictionary
+    cur.execute(query)
     messages = cur.fetchall()
 
     for message in messages:
         message = {'text':message['message'],'name':message['username']}
         emit('message', message)
 
+
+
+                
+            
 @socketio.on('search', namespace='/chat')
-#@app.route('/',methods=['GET', 'POST'])
-def search(searchterm): #had to comment this function because it breaks our new message function 
-    #print searchIn
-    print searchterm
+def search(searchterm): 
+    print searchterm 
+    searchterm = '%' + searchterm + '%'
+    print searchterm 
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    # i think this query will work 
-    # cur.execute("SELECT * from messages where message like %%s%)",(searchterm))
-    # results = cur.fetchall()
+    #queryold = "SELECT message, username FROM NSA WHERE message LIKE %s"
+    query = "SELECT message, username FROM %s WHERE message LIKE %s" % (currentChatRoom,'%s')
+    print cur.mogrify(query, (searchterm,)) 
+    cur.execute(query,(searchterm,))
+    results = cur.fetchall()
+    print results
+    res = ['user','Text']
+    for r in results:
+        emit('search', dict(zip(res,r)))
+            
     
-    #ok this for loop should send the results to our html file to be displayed
-    #for result in results:
-        #result = {'text':result['message'], 'name':result['username']}
-        #emit('search',result)
-    print "search is called"
-    #search = request.form['Search']
-    #this will be needed to send the results from the query to the html
-    #emit('search', search)
-   # tmip = {'text':searchterm, 'name':users[session['uuid']]['username']}
-    search = searchIn 
-    #print tmip
+  
     
 @socketio.on('message', namespace='/chat')
-#@app.route('/chat',methods=['GET', 'POST'])
 def new_message(message):
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     print "while true"
- 
-    #tmp = {'text':message, 'name':'testName'}
     tmp = {'text':message, 'name':users[session['uuid']]['username']}
     messages.append(tmp)
-   # while True:
-    # say is the message from your form message still stays as a column name
+  
     say = message
     print message
     user = session['username']
-    print cur.mogrify("insert into messages (username, message) VALUES (%s,%s)",(user, say))        
-    cur.execute("insert into messages (username, message) VALUES (%s,%s)",(user, say))
+    #print cur.mogrify("insert into messages (username, message) VALUES (%s,%s)",(user, say))   
+    print 'insert'
+    conn.commit()
+    print say
+    query = "INSERT into %s (username, message) VALUES (%s,%s)" % (currentChatRoom,'%s','%s')
+    cur.execute(query ,(user, say))
+    #print cur.mogrify("insert into messages (username, message) VALUES (%s,%s)",(user, say))        
+    #cur.execute("insert into messages (username, message) VALUES (%s,%s)",(user, say))
     print 'insert'
     conn.commit()
     print say
@@ -105,6 +166,7 @@ def on_identify(message):
     print 'identify' + message
     users[session['uuid']]={'username':message}
     updateRoster()
+    updateRooms()
 
 
 @socketio.on('login', namespace='/chat')
@@ -146,7 +208,7 @@ def signup():
       print 'Session'
       pw = request.form['pass']
       print pw
-      #below is to check if cur is working right! tried that and I think its not well get to it later hopefully
+      
      #print cur.mognify("insert into userlist (username,password) VALUES (%s,crypt(%s, gen_salt('bf')))",  (username, pw))
       cur.execute("insert into userlist (username,password) VALUES (%s,crypt(%s, gen_salt('bf')))",  (username, pw))
       #cur.execute("insert into userlist (username,password) VALUES (%s,%s)",  (username, pw))
@@ -172,13 +234,7 @@ def on_disconnect():
     return redirect(url_for('mainIndex'))
 
 
-#@socketio.on('/', namespace='/chat')
-#def chat():
- #   print "chat"
-  #  says = request.form['msg'] 
-   # print says
-   
-#    return app.send_static_file('index.html')
+
     
 
 
@@ -186,13 +242,11 @@ def on_disconnect():
 def mainIndex():
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)  
-   # empty = ""
-    #typing = request.form['msg']
-    #new_message(typing)
-    cur.execute("select * from messages") # i just remembered this will give us a dictionary
-    rows = cur.fetchall() # need to get these values into the message box now
-    for row in rows:
-        print row
+  
+    #cur.execute("select * from messages") 
+    #rows = cur.fetchall() 
+    #for row in rows:
+    #    print row
   
     
     
