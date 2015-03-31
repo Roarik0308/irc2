@@ -15,9 +15,8 @@ searchIn = [{ 'text':'searchterm', 'name':'username'}] #This breaks our messages
 users = {}
 room = []
 rooms = ['Spammers', 'Police','NSA'] # these will remain the names we use, but we will just have to translate them into message(_,2,3)
-global List # what is list?
-global currentChatRoom
-currentChatRoom = 'NSA'
+#global List # what is list?
+
 DefultRoom = 'SELECT message, username FROM NSA'
 def connectToDB():
   connectionString = 'dbname=chatroom user=postgres password=Razula host=localhost'
@@ -40,13 +39,13 @@ def updateRoster():
 def updateRooms():
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)      
-    #query = "select tableName from names"
-    #cur.execute(query)
-    #rooms=[]
-    #room = cur.fetchall()
-    #for roomNum in room:
-        #rooms.append(roomNum['tableName'])
-        #print roomNum['tableName']
+    query = "select tableName from names"
+    cur.execute(query)
+    rooms=[]
+    room = cur.fetchall()
+    for roomNum in room:
+        rooms.append(roomNum['tableName'])
+        print roomNum['tableName']
     emit('rooms', rooms)
     
     
@@ -57,7 +56,7 @@ def updateRooms():
 def new_room(Pass_Room):
 
     print "newroom"
-   # rooms.append(Pass_Room)
+    rooms.append(Pass_Room)
     print 'updating rooms'
     updateRooms()
     print Pass_Room
@@ -77,17 +76,17 @@ def new_room(Pass_Room):
 @socketio.on('changeRoom',namespace='/chat')
 def changeRoom(room_name):
     print "changing ROOOOOOOOM"
-    currentChatRoom = room_name
+    session['currentChatRoom'] = room_name
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)  
-    #query = "SELECT message, username from %s" % currentChatRoom 
-    #cur.execute(query)    
-    #messages = cur.fetchall()
-
-    #for message in messages:
-    #    message = {'text':message['message'],'name':message['username']}
-    #    emit('message', message)    
-    print currentChatRoom
+    query = "SELECT message, username from %s" % session['currentChatRoom'] 
+    cur.execute(query)    
+    messages = cur.fetchall()
+    
+    for message in messages:
+        message = {'text':message['message'],'name':message['username']}
+        emit('message', message)    
+    print session['currentChatRoom']
     
     
 @socketio.on('connect', namespace='/chat')
@@ -96,13 +95,13 @@ def test_connect():
     session['uuid']=uuid.uuid1()
     session['username']='starter name'
     print 'connected'
-    
+    session['currentChatRoom']='NSA'    
     users[session['uuid']]={'username':'New User'}
     if session['uuid'] in users:
         del users[session['uuid']]
     updateRoster()
     updateRooms()
-    query = "SELECT message, username FROM %s ORDER by id desc limit 10" % currentChatRoom
+    query = "SELECT message, username FROM %s ORDER by id desc limit 10" % session['currentChatRoom']
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)  
     cur.execute(query)
@@ -124,7 +123,7 @@ def search(searchterm):
     conn = connectToDB()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     #queryold = "SELECT message, username FROM NSA WHERE message LIKE %s"
-    query = "SELECT message, username FROM %s WHERE message LIKE %s" % (currentChatRoom,'%s')
+    query = "SELECT message, username FROM %s WHERE message LIKE %s" % (session['currentChatRoom'],'%s')
     print cur.mogrify(query, (searchterm,)) 
     cur.execute(query,(searchterm,))
     results = cur.fetchall()
@@ -143,7 +142,6 @@ def new_message(message):
     print "while true"
     tmp = {'text':message, 'name':users[session['uuid']]['username']}
     messages.append(tmp)
-  
     say = message
     print message
     user = session['username']
@@ -151,7 +149,7 @@ def new_message(message):
     print 'insert'
     conn.commit()
     print say
-    query = "INSERT into %s (username, message) VALUES (%s,%s)" % (currentChatRoom,'%s','%s')
+    query = "INSERT into %s (username, message) VALUES (%s,%s)" % (session['currentChatRoom'],'%s','%s')
     cur.execute(query ,(user, say))
     #print cur.mogrify("insert into messages (username, message) VALUES (%s,%s)",(user, say))        
     #cur.execute("insert into messages (username, message) VALUES (%s,%s)",(user, say))

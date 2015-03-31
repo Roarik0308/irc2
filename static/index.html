@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en" ng-app>
   <head>
-    <title>Chat</title>
+    <title>ROFL Chat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/bootstrap-responsive.min.css">
@@ -97,8 +97,9 @@ if(showhide == "show"){
         });
          $scope.changeRoom = function(new_room)
         {
+          $scope.messages= [];
           $scope.current_room=new_room;
-          //socket.emit('changeRoom',$scope.new_room)
+          socket.emit('changeRoom',new_room)
         }
          $scope.createRoom = function()
         {
@@ -197,7 +198,7 @@ if(showhide == "show"){
         </div>
       </div>
       <div class="page-header">
-        <h1>Chat Example</h1>
+        <h1>ROFL CHAT</h1>
       </div>
       <div class="row">
         <div class="span3">
